@@ -16,12 +16,17 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use tokio_util::io::ReaderStream;
 
-//use std::net::SocketAddr;
+/*
+use rustls::internal::pemfile::{certs, rsa_private_keys};
+use rustls::{server::NoClientAuth, ServerConfig};
+use rustls::crypto::aws_lc_rs::sign::any_ecdsa_type;
+use rustls::HandshakeType::Certificate;
+*/
+use rcgen::{generate_simple_self_signed, CertifiedKey};
+use std::{net::SocketAddr, fs};
 use git2::{Repository, Oid};
 use clap::{App as ClapApp, Arg};
-use std::fs;
 
-use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Clone)]
@@ -215,21 +220,63 @@ async fn redirect_http_to_https(ports: Ports) {
         .unwrap();
 }
 
+fn generate_self_signed_cert(hostname: &str) -> Result<CertifiedKey, rcgen::Error> {
+/*
+    // Generate ECC private key
+    let rsa_key = Arc::new(any_ecdsa_type(&rustls::generate_ecdsa_key)).into();
+    let mut config = ServerConfig::new(NoClientAuth::new());
+    config.set_single_cert(vec![Certificate(rsa_key.clone())], rustls::PrivateKey(rsa_key.clone()));
+
+    // Write private key and certificate to disk
+    let mut cert_file = File::create("cert.pem")?;
+    let mut key_file = File::create("key.pem")?;
+
+    let mut key_buf = vec![];
+    config.key.write_pem(&mut key_buf).unwrap();
+    key_file.write_all(&key_buf)?;
+
+    let mut cert_buf = vec![];
+    let common_name = format!("CN={}", hostname);
+    config.certificates[0].write_pem(&mut cert_buf).unwrap();
+    cert_file.write_all(&cert_buf)?;
+    Ok(())
+*/
+    let subject_alt_names = vec![hostname.to_string()];
+    let cert = generate_simple_self_signed(subject_alt_names).unwrap();
+
+    // The certificate is now valid for hostname
+    println!("{}", cert.key_pair.serialize_pem());
+    println!("{}", cert.cert.pem());
+
+    Ok(cert)
+}
+
 #[tokio::main]
 async fn main() {
     // Parse command-line arguments
     let matches = ClapApp::new("Git Repository Viewer")
-        .arg(Arg::with_name("repo_path")
-            .short('r')
-            .long("repo-path")
-            .value_name("PATH")
-            .help("Sets the path to the Git repositories directory")
-            .takes_value(true)
-            .required(true))
+        .arg(
+            Arg::with_name("repo_path")
+                .short('r')
+                .long("repo-path")
+                .value_name("PATH")
+                .help("Sets the path to the Git repositories directory")
+                .takes_value(true)
+                .required(true))
+        .arg(
+            Arg::with_name("hostname")
+                .short('n')
+                .long("hostname")
+                .value_name("HOSTNAME")
+                .help("Sets the hostname for the certificate")
+                .default_value("localhost")
+                .takes_value(true)
+                .required(false),
+        )
         .get_matches();
 
+    let hostname = matches.value_of("hostname").unwrap();
     let repo_path = matches.value_of("repo_path").unwrap().to_string();
-
     let app_state = AppState { repo_path };
 
     tracing_subscriber::registry()
@@ -249,6 +296,15 @@ async fn main() {
     //tokio::spawn(redirect_http_to_https(ports));
 
     // Load your SSL certificate and private key
+    match generate_self_signed_cert(hostname) {
+        Ok(_) => todo!(),
+        Err(e) => {
+            println!("Erorr: unable to generate self-signed certificates for HTTPS");
+            println!("{}", e);
+            std::process::exit(1);
+        }
+    }
+
     let config = RustlsConfig::from_pem_file("cert.pem", "key.pem")
     .await
     .unwrap();
