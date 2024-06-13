@@ -232,17 +232,6 @@ async fn main() {
 
     let app_state = AppState { repo_path };
 
-    // Load your SSL certificate and private key
-/*
-    let cert = tokio_rustls::rustls::internal::pemfile::certs(&mut std::fs::File::open("cert.pem").unwrap()).unwrap();
-    let key = tokio_rustls::rustls::internal::pemfile::pkcs8_private_keys(&mut std::fs::File::open("key.pem").unwrap()).unwrap();
-
-    // Configure TLS
-    let mut config = ServerConfig::new(NoClientAuth::new());
-    config.set_single_cert(cert, key[0].clone()).unwrap();
-    let acceptor = Arc::new(RustlsTlsAcceptor::from(Arc::new(config)));
-*/
-
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -255,10 +244,11 @@ async fn main() {
         http: 8080,
         https: 8081,
     };
+
     // optional: spawn a second server to redirect http requests to this server
     //tokio::spawn(redirect_http_to_https(ports));
 
-    // configure certificate and private key used by https
+    // Load your SSL certificate and private key
     let config = RustlsConfig::from_pem_file("cert.pem", "key.pem")
     .await
     .unwrap();
@@ -284,12 +274,10 @@ async fn main() {
         .with_state(app_state);
 
     // Define the server address
-    //let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
     let addr = SocketAddr::from(([0, 0, 0, 0], ports.https));
 
     // Start the https server
     println!("Starting web server on 0.0.0.0:{}", ports.https);
-    //let _ = axum::serve(listener, app).await.unwrap();
     tracing::debug!("listening on {}", addr);
     axum_server::bind_rustls(addr, config)
         .serve(app.into_make_service())
