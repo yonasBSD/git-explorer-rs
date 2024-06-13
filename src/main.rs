@@ -226,12 +226,21 @@ fn generate_self_signed_cert(hostname: &str) -> Result<CertifiedKey, rcgen::Erro
     let mut params = CertificateParams::new(subject_alt_names)?;
     let mut dn = DistinguishedName::new();
     dn.push(DnType::CommonName, hostname);
-    //dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".try_into().unwrap()));
     params.distinguished_name = dn;
     let cert = params.self_signed(&key_pair)?;
 
     // The certificate is now valid for hostname
     Ok(CertifiedKey { cert, key_pair })
+}
+
+fn hostname() -> String {
+    match hostname::get() {
+        Ok(host) => String::from(host.to_str().unwrap()),
+        Err(e) => {
+            tracing::debug!("Error getting hostname: {}", e);
+            String::from("localhost")
+        }
+    }
 }
 
 #[tokio::main]
@@ -252,7 +261,7 @@ async fn main() {
                 .long("hostname")
                 .value_name("HOSTNAME")
                 .help("Sets the hostname for the certificate")
-                .default_value("localhost")
+                .default_value(&hostname())
                 .takes_value(true)
                 .required(false),
         )
