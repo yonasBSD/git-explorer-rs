@@ -296,18 +296,18 @@ async fn main() {
     //tokio::spawn(redirect_http_to_https(ports));
 
     // Load your SSL certificate and private key
-    match generate_self_signed_cert(hostname) {
-        Ok(_) => todo!(),
+    let cert = match generate_self_signed_cert(hostname) {
+        Ok(cert) => cert,
         Err(e) => {
             println!("Erorr: unable to generate self-signed certificates for HTTPS");
             println!("{}", e);
             std::process::exit(1);
         }
-    }
+    };
 
-    let config = RustlsConfig::from_pem_file("cert.pem", "key.pem")
-    .await
-    .unwrap();
+    let config = RustlsConfig::from_pem(cert.cert.pem().into(), cert.key_pair.serialize_pem().into())
+        .await
+        .unwrap();
 
     // Create the router
     let app = Router::new()
