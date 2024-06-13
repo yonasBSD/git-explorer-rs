@@ -15,18 +15,10 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use tokio_util::io::ReaderStream;
-
-/*
-use rustls::internal::pemfile::{certs, rsa_private_keys};
-use rustls::{server::NoClientAuth, ServerConfig};
-use rustls::crypto::aws_lc_rs::sign::any_ecdsa_type;
-use rustls::HandshakeType::Certificate;
-*/
 use rcgen::{KeyPair, CertifiedKey, CertificateParams, DistinguishedName, DnType};
 use std::{net::SocketAddr, fs};
 use git2::{Repository, Oid};
 use clap::{App as ClapApp, Arg};
-
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Clone)]
