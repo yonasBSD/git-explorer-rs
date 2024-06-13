@@ -22,7 +22,7 @@ use rustls::{server::NoClientAuth, ServerConfig};
 use rustls::crypto::aws_lc_rs::sign::any_ecdsa_type;
 use rustls::HandshakeType::Certificate;
 */
-use rcgen::{KeyPair, CertifiedKey, CertificateParams};
+use rcgen::{KeyPair, CertifiedKey, CertificateParams, DistinguishedName, DnType};
 use std::{net::SocketAddr, fs};
 use git2::{Repository, Oid};
 use clap::{App as ClapApp, Arg};
@@ -223,7 +223,12 @@ async fn redirect_http_to_https(ports: Ports) {
 fn generate_self_signed_cert(hostname: &str) -> Result<CertifiedKey, rcgen::Error> {
     let subject_alt_names = vec![hostname.to_string()];
     let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519)?;
-    let cert = CertificateParams::new(subject_alt_names)?.self_signed(&key_pair)?;
+    let mut params = CertificateParams::new(subject_alt_names)?;
+    let mut dn = DistinguishedName::new();
+    dn.push(DnType::CommonName, hostname);
+    //dn.push(DnType::CommonName, DnValue::PrintableString("Master Cert".try_into().unwrap()));
+    params.distinguished_name = dn;
+    let cert = params.self_signed(&key_pair)?;
 
     // The certificate is now valid for hostname
     Ok(CertifiedKey { cert, key_pair })
