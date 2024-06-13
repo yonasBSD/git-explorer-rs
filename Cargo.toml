@@ -1,0 +1,15 @@
+[package]
+name = "git"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "*"
+tokio = { version = "1", features = ["full"] }
+git2 = "*"
+clap = "3.0"
+serde = { version = "1.0.203", features = ["derive"] }
+tokio-util = { version = "0.7.11", features = ["io", "rt"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+axum-server = { version = "0.6.0", features = ["tls-rustls", "tokio-rustls"] }
