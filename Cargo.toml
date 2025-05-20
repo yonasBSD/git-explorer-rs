@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 axum = "*"
 tokio = { version = "1", features = ["full"] }
-git2 = "*"
 clap = "3.0"
 serde = { version = "*", features = ["derive"] }
 tokio-util = { version = "*", features = ["io", "rt"] }
@@ -16,4 +15,5 @@ axum-server = { version = "*", features = ["tls-rustls", "tokio-rustls"] }
 rustls = "*"
 rcgen = "*"
 hostname = "*"
-axum-extra = "0.10.1"
+axum-extra = "*"
+gix = "*"

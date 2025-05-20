@@ -17,7 +17,6 @@ use axum_server::tls_rustls::RustlsConfig;
 use tokio_util::io::ReaderStream;
 use rcgen::{KeyPair, CertifiedKey, CertificateParams, DistinguishedName, DnType};
 use std::{net::SocketAddr, fs};
-use git2::{Repository, Oid};
 use clap::{App as ClapApp, Arg};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -48,23 +47,13 @@ async fn show_commit(
     let repo_path = state.repo_path.clone();
 
     // Open the Git repository
-    let repo_path2 = format!("{}/{}", repo_path, repo_name);
-    let repo = match Repository::open(&repo_path2) {
+    let repo = match gix::discover(format!("{}/{}", repo_path, repo_name)) {
         Ok(repo) => repo,
-        Err(_) => return Html("Repository not found".into()),
+        Err(_) => return Html(String::from("")),
     };
 
-    // Resolve commit ID to OID
-    let commit_oid = match Oid::from_str(&commit_id) {
-        Ok(oid) => oid,
-        Err(_) => return Html("Invalid commit ID".into()),
-    };
-
-    // Lookup commit by OID
-    let commit = match repo.find_commit(commit_oid) {
-        Ok(commit) => commit,
-        Err(_) => return Html("Commit not found".into()),
-    };
+    // Lookup commit
+    let commit = repo.find_commit(gix::ObjectId::from_hex(commit_id.as_bytes()).unwrap()).unwrap();
 
     // Build HTML response
     // Read HTML from a local file
@@ -77,10 +66,9 @@ async fn show_commit(
     };
 
     // Replace "{}" with the commit message
-    let commit_message = commit.message().unwrap_or("No message").replace("\n", "<br/>");
-    let commit_author = commit.author();
-    let commit_name = commit_author.name().unwrap_or("");
-    let commit_email = commit_author.email().unwrap_or("");
+    let commit_message = String::from(commit.message().unwrap().title.to_string());
+    let commit_name = commit.author().unwrap().name;
+    let commit_email = commit.author().unwrap().email;
 
     Html(html.replace("{}", format!("{} &lt;{}&gt;<br/>{}", &commit_name, &commit_email, &commit_message).as_str()))
 }
@@ -93,47 +81,36 @@ async fn get_commits_json(
     let repo_path = state.repo_path.clone();
 
     // Open the Git repository
-    let repo_path2 = format!("{}/{}", repo_path, repo_name);
-    let repo = match Repository::open(&repo_path2) {
+    let repo = match gix::discover(format!("{}/{}", repo_path, repo_name)) {
         Ok(repo) => repo,
         Err(_) => return Json(vec![]),
     };
-
-    let mut revwalk = match repo.revwalk() {
-        Ok(revwalk) => revwalk,
-        Err(err) => {
-            eprintln!("Failed to create revwalk: {}", err);
-            return Json(vec![]);
-        }
-    };
-
-    // Set the sorting order
-    revwalk.set_sorting(git2::Sort::TIME).unwrap();
-
-    // Start from the HEAD of the master branch
-    revwalk.push_head().unwrap();
+    let commit = repo
+        .rev_parse_single("HEAD")
+        .unwrap()
+        .object()
+        .unwrap()
+        .try_into_commit()
+        .unwrap();
+    let aa = repo
+        .rev_walk([commit.id])
+        .sorting(gix::revision::walk::Sorting::ByCommitTime(Default::default()))
+        .all()
+        .unwrap();
 
     // Collect commits
-    let commits: Vec<Commit> = revwalk
-        .filter_map(|oid| {
-            let oid = match oid {
-                Ok(oid) => oid,
-                Err(_) => return None,
-            };
+    let mut commits: Vec<Commit> = vec![];
+    for c in aa {
+        let commit = c.unwrap().object().unwrap();
 
-            let commit = match repo.find_commit(oid) {
-                Ok(commit) => commit,
-                Err(_) => return None,
-            };
-
-            let x = Some(Commit {
-                id: oid.to_string(),
-                author: String::from(format!("{} [{}]", commit.author().name().unwrap(), commit.author().email().unwrap_or(""))),
-                message: String::from(commit.message().unwrap()),
-                date: commit.time().seconds(),
-            }); x
-        })
-        .collect();
+        let x = Some(Commit {
+            id: commit.id.to_string(),
+            author: String::from(format!("{} [{}]", commit.author().unwrap().name, commit.author().unwrap().email)),
+            message: String::from(commit.message().unwrap().title.to_string()),
+            date: commit.time().unwrap().seconds,
+        }).unwrap();
+        commits.push(x);
+    }
 
     Json(commits)
 }
@@ -314,7 +291,7 @@ async fn main() {
         .with_state(app_state);
 
     // Define the server address
-    let addr = SocketAddr::from(([0, 0, 0, 0], ports.https));
+    let addr = SocketAddr::from(([127, 0, 0, 1], ports.https));
 
     // Start the https server
     println!("Starting web server on 0.0.0.0:{}", ports.https);
