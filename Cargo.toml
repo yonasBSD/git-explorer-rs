@@ -17,3 +17,5 @@ rcgen = "*"
 hostname = "*"
 axum-extra = "*"
 gix = "*"
+axum-embed = "*"
+rust-embed = { version = "*", features = ["axum", "tokio"] }

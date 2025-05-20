@@ -12,12 +12,18 @@ use axum::{
     BoxError, Router,
 };
 use axum_extra::extract::Host;
+use rust_embed::RustEmbed;
+use axum_embed::ServeEmbed;
 use axum_server::tls_rustls::RustlsConfig;
 use clap::{App as ClapApp, Arg};
 use rcgen::{CertificateParams, CertifiedKey, DistinguishedName, DnType, KeyPair};
 use std::{fs, net::SocketAddr};
 use tokio_util::io::ReaderStream;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[derive(RustEmbed, Clone)]
+#[folder = "assets/"]
+struct Assets;
 
 #[derive(Clone)]
 struct AppState {
@@ -58,7 +64,7 @@ async fn show_commit(
 
     // Build HTML response
     // Read HTML from a local file
-    let html = match fs::read_to_string("file.html") {
+    let html = match fs::read_to_string("templates/file.html") {
         Ok(html) => html,
         Err(e) => {
             eprintln!("Error reading file: {}", e);
@@ -134,7 +140,7 @@ async fn get_commits_json(
 async fn get_commits(State(_state): State<AppState>) -> Html<String> {
     // Build HTML response
     // Read HTML from a local file
-    let html = match fs::read_to_string("commits.html") {
+    let html = match fs::read_to_string("templates/commits.html") {
         Ok(html) => html,
         Err(e) => {
             eprintln!("Error reading file: {}", e);
@@ -164,9 +170,76 @@ async fn get_static_file(
         .unwrap()
         .to_str()
     {
-        Some("js") => [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+        Some("html") =>  [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        Some("css") =>   [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        Some("js") =>    [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+        Some("json") =>  [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+        Some("png") =>   [(header::CONTENT_TYPE, "image/png; charset=utf-8")],
+        Some("jpg") =>   [(header::CONTENT_TYPE, "image/jpeg; charset=utf-8")],
+        Some("jpeg") =>  [(header::CONTENT_TYPE, "image/jpeg; charset=utf-8")],
+        Some("gif") =>   [(header::CONTENT_TYPE, "image/gif; charset=utf-8")],
+        Some("svg") =>   [(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")],
+        Some("ico") =>   [(header::CONTENT_TYPE, "image/x-icon; charset=utf-8")],
+        Some("ttf") =>   [(header::CONTENT_TYPE, "font/ttf; charset=utf-8")],
+        Some("woff") =>  [(header::CONTENT_TYPE, "font/woff; charset=utf-8")],
+        Some("woff2") => [(header::CONTENT_TYPE, "font/woff2; charset=utf-8")],
+        Some("eot") =>   [(header::CONTENT_TYPE, "application/vnd.ms-fontobject; charset=utf-8")],
+        Some("otf") =>   [(header::CONTENT_TYPE, "font/otf; charset=utf-8")],
+        Some("txt") =>   [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        Some("pdf") =>   [(header::CONTENT_TYPE, "application/pdf; charset=utf-8")],
+        Some("doc") =>   [(header::CONTENT_TYPE, "application/msword; charset=utf-8")],
+        Some("docx") =>  [(header::CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.wordprocessingml.document; charset=utf-8")],
+        Some("xls") =>   [(header::CONTENT_TYPE, "application/vnd.ms-excel; charset=utf-8")],
+        Some("xlsx") =>  [(header::CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; charset=utf-8")],
+        Some("ppt") =>   [(header::CONTENT_TYPE, "application/vnd.ms-powerpoint; charset=utf-8")],
+        Some("pptx") =>  [(header::CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.presentationml.presentation; charset=utf-8")],
+        Some("xml") =>   [(header::CONTENT_TYPE, "application/xml; charset=utf-8")],
+        Some("zip") =>   [(header::CONTENT_TYPE, "application/zip; charset=utf-8")],
+        Some("rar") =>   [(header::CONTENT_TYPE, "application/x-rar-compressed; charset=utf-8")],
+        Some("7z") =>    [(header::CONTENT_TYPE, "application/x-7z-compressed; charset=utf-8")],
+        Some("gz") =>    [(header::CONTENT_TYPE, "application/gzip; charset=utf-8")],
+        Some("tar") =>   [(header::CONTENT_TYPE, "application/x-tar; charset=utf-8")],
+        Some("swf") =>   [(header::CONTENT_TYPE, "application/x-shockwave-flash; charset=utf-8")],
+        Some("flv") =>   [(header::CONTENT_TYPE, "video/x-flv; charset=utf-8")],
+        Some("avi") =>   [(header::CONTENT_TYPE, "video/x-msvideo; charset=utf-8")],
+        Some("mov") =>   [(header::CONTENT_TYPE, "video/quicktime; charset=utf-8")],
+        Some("mp4") =>   [(header::CONTENT_TYPE, "video/mp4; charset=utf-8")],
+        Some("mp3") =>   [(header::CONTENT_TYPE, "audio/mpeg; charset=utf-8")],
+        Some("wav") =>   [(header::CONTENT_TYPE, "audio/x-wav; charset=utf-8")],
+        Some("ogg") =>   [(header::CONTENT_TYPE, "audio/ogg; charset=utf-8")],
+        Some("webm") =>  [(header::CONTENT_TYPE, "video/webm; charset=utf-8")],
+        Some("mpg") =>   [(header::CONTENT_TYPE, "video/mpeg; charset=utf-8")],
+        Some("mpeg") =>  [(header::CONTENT_TYPE, "video/mpeg; charset=utf-8")],
+        Some("mpe") =>   [(header::CONTENT_TYPE, "video/mpeg; charset=utf-8")],
+        Some("mp2") =>   [(header::CONTENT_TYPE, "video/mpeg; charset=utf-8")],
+        Some("m4v") =>   [(header::CONTENT_TYPE, "video/x-m4v; charset=utf-8")],
+        Some("3gp") =>   [(header::CONTENT_TYPE, "video/3gpp; charset=utf-8")],
+        Some("3g2") =>   [(header::CONTENT_TYPE, "video/3gpp2; charset=utf-8")],
+        Some("mkv") =>   [(header::CONTENT_TYPE, "video/x-matroska; charset=utf-8")],
+        Some("amv") =>   [(header::CONTENT_TYPE, "video/x-matroska; charset=utf-8")],
+        Some("m3u") =>   [(header::CONTENT_TYPE, "audio/x-mpegurl; charset=utf-8")],
+        Some("m3u8") =>  [(header::CONTENT_TYPE, "application/vnd.apple.mpegurl; charset=utf-8")],
+        Some("ts") =>    [(header::CONTENT_TYPE, "video/mp2t; charset=utf-8")],
+        Some("f4v") =>   [(header::CONTENT_TYPE, "video/mp4; charset=utf-8")],
+        Some("f4p") =>   [(header::CONTENT_TYPE, "video/mp4; charset=utf-8")],
+        Some("f4a") =>   [(header::CONTENT_TYPE, "video/mp4; charset=utf-8")],
+        Some("f4b") =>   [(header::CONTENT_TYPE, "video/mp4; charset=utf-8")],
+        Some("webp") =>  [(header::CONTENT_TYPE, "image/webp; charset=utf-8")],
+        Some("bmp") =>   [(header::CONTENT_TYPE, "image/bmp; charset=utf-8")],
+        Some("tif") =>   [(header::CONTENT_TYPE, "image/tiff; charset=utf-8")],
+        Some("tiff") =>  [(header::CONTENT_TYPE, "image/tiff; charset=utf-8")],
+        Some("psd") =>   [(header::CONTENT_TYPE, "image/vnd.adobe.photoshop; charset=utf-8")],
+        Some("ai") =>    [(header::CONTENT_TYPE, "application/postscript; charset=utf-8")],
+        Some("eps") =>   [(header::CONTENT_TYPE, "application/postscript; charset=utf-8")],
+        Some("ps") =>    [(header::CONTENT_TYPE, "application/postscript; charset=utf-8")],
+        Some("dwg") =>   [(header::CONTENT_TYPE, "image/vnd.dwg; charset=utf-8")],
+        Some("dxf") =>   [(header::CONTENT_TYPE, "image/vnd.dxf; charset=utf-8")],
+        Some("rtf") =>   [(header::CONTENT_TYPE, "application/rtf; charset=utf-8")],
+        Some("odt") =>   [(header::CONTENT_TYPE, "application/vnd.oasis.opendocument.text; charset=utf-8")],
+        Some("ods") =>   [(header::CONTENT_TYPE, "application/vnd.oasis.opendocument.spreadsheet; charset=utf-8")],
+        Some("wasm") =>  [(header::CONTENT_TYPE, "application/wasm; charset=utf-8")],
+        Some(&_) => [(header::CONTENT_TYPE, "application/octet-stream; charset=utf-8")],
         None => todo!(),
-        Some(&_) => todo!(),
     };
 
     Ok((headers, body))
@@ -224,13 +297,17 @@ async fn main() {
         //https: 8182,
     };
 
+    let serve_assets = ServeEmbed::<Assets>::new();
+
     // Create the router
     let app = Router::new()
         .route("/api/v1/repo/{repo_name}/commit/{commit_id}", get(show_commit))
         .route("/api/v1/repo/{repo_name}/commits/json", get(get_commits_json))
         .route("/api/v1/repo/{repo_name}/commits/all", get(get_commits))
-        .route("/static/{file_name}", get(get_static_file))
+        //.route("/static/{file_name}", get(get_static_file))
+        .nest_service("/static", serve_assets)
         .with_state(app_state);
+
 
     // Define the server address
     let addr = SocketAddr::from(([127, 0, 0, 1], ports.http));
