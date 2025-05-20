@@ -226,9 +226,9 @@ async fn main() {
 
     // Create the router
     let app = Router::new()
-        .route("/repo/{repo_name}/commit/{commit_id}", get(show_commit))
-        .route("/repo/{repo_name}/commits/json", get(get_commits_json))
-        .route("/repo/{repo_name}/commits/all", get(get_commits))
+        .route("/api/v1/repo/{repo_name}/commit/{commit_id}", get(show_commit))
+        .route("/api/v1/repo/{repo_name}/commits/json", get(get_commits_json))
+        .route("/api/v1/repo/{repo_name}/commits/all", get(get_commits))
         .route("/static/{file_name}", get(get_static_file))
         .with_state(app_state);
 
