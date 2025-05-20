@@ -5,7 +5,6 @@ use axum::{
     response::Redirect,
     extract::Path,
     extract::State,
-    extract::Host,
     routing::get,
     http::{header, StatusCode, Uri},
     body::Body,
@@ -13,6 +12,7 @@ use axum::{
     BoxError,
     Router,
 };
+use axum_extra::extract::Host;
 use axum_server::tls_rustls::RustlsConfig;
 use tokio_util::io::ReaderStream;
 use rcgen::{KeyPair, CertifiedKey, CertificateParams, DistinguishedName, DnType};
@@ -86,7 +86,7 @@ async fn show_commit(
 }
 
 async fn get_commits_json(
-    Path((repo_name,)): Path<(String,)>, 
+    Path((repo_name,)): Path<(String,)>,
     State(state): State<AppState>
 ) -> Json<Vec<Commit>>
 {
@@ -154,7 +154,7 @@ async fn get_commits(State(_state): State<AppState>) -> Html<String>
 }
 
 async fn get_static_file(
-    Path((file_name,)): Path<(String,)>, 
+    Path((file_name,)): Path<(String,)>,
     State(_state): State<AppState>
 ) -> impl IntoResponse
 {
@@ -272,8 +272,8 @@ async fn main() {
         .init();
 
     let ports = Ports {
-        http: 8080,
-        https: 8081,
+        http: 8181,
+        https: 8182,
     };
 
     // optional: spawn a second server to redirect http requests to this server
@@ -296,19 +296,19 @@ async fn main() {
     // Create the router
     let app = Router::new()
         .route(
-            "/repo/:repo_name/commit/:commit_id",
+            "/repo/{repo_name}/commit/{commit_id}",
             get(show_commit)
         )
         .route(
-            "/repo/:repo_name/commits/json",
+            "/repo/{repo_name}/commits/json",
             get(get_commits_json)
         )
         .route(
-            "/repo/:repo_name/commits/all",
+            "/repo/{repo_name}/commits/all",
             get(get_commits)
         )
         .route(
-            "/static/:file_name",
+            "/static/{file_name}",
             get(get_static_file)
         )
         .with_state(app_state);
