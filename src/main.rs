@@ -1,23 +1,22 @@
 use axum::{
-    response::IntoResponse,
-    response::Html,
-    response::Json,
-    response::Redirect,
+    body::Body,
     extract::Path,
     extract::State,
-    routing::get,
-    http::{header, StatusCode, Uri},
-    body::Body,
     handler::HandlerWithoutStateExt,
-    BoxError,
-    Router,
+    http::{header, StatusCode, Uri},
+    response::Html,
+    response::IntoResponse,
+    response::Json,
+    response::Redirect,
+    routing::get,
+    BoxError, Router,
 };
 use axum_extra::extract::Host;
 use axum_server::tls_rustls::RustlsConfig;
-use tokio_util::io::ReaderStream;
-use rcgen::{KeyPair, CertifiedKey, CertificateParams, DistinguishedName, DnType};
-use std::{net::SocketAddr, fs};
 use clap::{App as ClapApp, Arg};
+use rcgen::{CertificateParams, CertifiedKey, DistinguishedName, DnType, KeyPair};
+use std::{fs, net::SocketAddr};
+use tokio_util::io::ReaderStream;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Clone)]
@@ -37,7 +36,7 @@ struct Commit {
 #[derive(Clone, Copy)]
 struct Ports {
     http: u16,
-    https: u16,
+    //https: u16,
 }
 
 async fn show_commit(
@@ -53,7 +52,9 @@ async fn show_commit(
     };
 
     // Lookup commit
-    let commit = repo.find_commit(gix::ObjectId::from_hex(commit_id.as_bytes()).unwrap()).unwrap();
+    let commit = repo
+        .find_commit(gix::ObjectId::from_hex(commit_id.as_bytes()).unwrap())
+        .unwrap();
 
     // Build HTML response
     // Read HTML from a local file
@@ -70,14 +71,22 @@ async fn show_commit(
     let commit_name = commit.author().unwrap().name;
     let commit_email = commit.author().unwrap().email;
 
-    Html(html.replace("{}", format!("{} &lt;{}&gt;<br/>{}", &commit_name, &commit_email, &commit_message).as_str()))
+    Html(
+        html.replace(
+            "{}",
+            format!(
+                "{} &lt;{}&gt;<br/>{}",
+                &commit_name, &commit_email, &commit_message
+            )
+            .as_str(),
+        ),
+    )
 }
 
 async fn get_commits_json(
     Path((repo_name,)): Path<(String,)>,
-    State(state): State<AppState>
-) -> Json<Vec<Commit>>
-{
+    State(state): State<AppState>,
+) -> Json<Vec<Commit>> {
     let repo_path = state.repo_path.clone();
 
     // Open the Git repository
@@ -94,7 +103,9 @@ async fn get_commits_json(
         .unwrap();
     let aa = repo
         .rev_walk([commit.id])
-        .sorting(gix::revision::walk::Sorting::ByCommitTime(Default::default()))
+        .sorting(gix::revision::walk::Sorting::ByCommitTime(
+            Default::default(),
+        ))
         .all()
         .unwrap();
 
@@ -105,18 +116,22 @@ async fn get_commits_json(
 
         let x = Some(Commit {
             id: commit.id.to_string(),
-            author: String::from(format!("{} [{}]", commit.author().unwrap().name, commit.author().unwrap().email)),
+            author: String::from(format!(
+                "{} [{}]",
+                commit.author().unwrap().name,
+                commit.author().unwrap().email
+            )),
             message: String::from(commit.message().unwrap().title.to_string()),
             date: commit.time().unwrap().seconds,
-        }).unwrap();
+        })
+        .unwrap();
         commits.push(x);
     }
 
     Json(commits)
 }
 
-async fn get_commits(State(_state): State<AppState>) -> Html<String>
-{
+async fn get_commits(State(_state): State<AppState>) -> Html<String> {
     // Build HTML response
     // Read HTML from a local file
     let html = match fs::read_to_string("commits.html") {
@@ -132,9 +147,8 @@ async fn get_commits(State(_state): State<AppState>) -> Html<String>
 
 async fn get_static_file(
     Path((file_name,)): Path<(String,)>,
-    State(_state): State<AppState>
-) -> impl IntoResponse
-{
+    State(_state): State<AppState>,
+) -> impl IntoResponse {
     // `File` implements `AsyncRead`
     let file = match tokio::fs::File::open(file_name.clone()).await {
         Ok(file) => file,
@@ -145,61 +159,17 @@ async fn get_static_file(
     // convert the `Stream` into an `axum::body::HttpBody`
     let body = Body::from_stream(stream);
 
-    let headers = match std::path::Path::new(&file_name).extension().unwrap().to_str() {
-        Some("js") => [ (header::CONTENT_TYPE, "text/javascript; charset=utf-8"), ],
+    let headers = match std::path::Path::new(&file_name)
+        .extension()
+        .unwrap()
+        .to_str()
+    {
+        Some("js") => [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
         None => todo!(),
-        Some(&_) => todo!()
+        Some(&_) => todo!(),
     };
 
     Ok((headers, body))
-}
-
-#[allow(dead_code)]
-async fn redirect_http_to_https(ports: Ports) {
-    fn make_https(host: String, uri: Uri, ports: Ports) -> Result<Uri, BoxError> {
-        let mut parts = uri.into_parts();
-
-        parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
-
-        if parts.path_and_query.is_none() {
-            parts.path_and_query = Some("/".parse().unwrap());
-        }
-
-        let https_host = host.replace(&ports.http.to_string(), &ports.https.to_string());
-        parts.authority = Some(https_host.parse()?);
-
-        Ok(Uri::from_parts(parts)?)
-    }
-
-    let redirect = move |Host(host): Host, uri: Uri| async move {
-        match make_https(host, uri, ports) {
-            Ok(uri) => Ok(Redirect::permanent(&uri.to_string())),
-            Err(error) => {
-                tracing::warn!(%error, "failed to convert URI to HTTPS");
-                Err(StatusCode::BAD_REQUEST)
-            }
-        }
-    };
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], ports.http));
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    tracing::debug!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, redirect.into_make_service())
-        .await
-        .unwrap();
-}
-
-fn generate_self_signed_cert(hostname: &str) -> Result<CertifiedKey, rcgen::Error> {
-    let subject_alt_names = vec![hostname.to_string()];
-    let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519)?;
-    let mut params = CertificateParams::new(subject_alt_names)?;
-    let mut dn = DistinguishedName::new();
-    dn.push(DnType::CommonName, hostname);
-    params.distinguished_name = dn;
-    let cert = params.self_signed(&key_pair)?;
-
-    // The certificate is now valid for hostname
-    Ok(CertifiedKey { cert, key_pair })
 }
 
 fn hostname() -> String {
@@ -223,7 +193,8 @@ async fn main() {
                 .value_name("PATH")
                 .help("Sets the path to the Git repositories directory")
                 .takes_value(true)
-                .required(true))
+                .required(true),
+        )
         .arg(
             Arg::with_name("hostname")
                 .short('n')
@@ -250,53 +221,24 @@ async fn main() {
 
     let ports = Ports {
         http: 8181,
-        https: 8182,
+        //https: 8182,
     };
-
-    // optional: spawn a second server to redirect http requests to this server
-    //tokio::spawn(redirect_http_to_https(ports));
-
-    // Load your SSL certificate and private key
-    let cert = match generate_self_signed_cert(hostname) {
-        Ok(cert) => cert,
-        Err(e) => {
-            println!("Erorr: unable to generate self-signed certificates for HTTPS");
-            println!("{}", e);
-            std::process::exit(1);
-        }
-    };
-
-    let config = RustlsConfig::from_pem(cert.cert.pem().into(), cert.key_pair.serialize_pem().into())
-        .await
-        .unwrap();
 
     // Create the router
     let app = Router::new()
-        .route(
-            "/repo/{repo_name}/commit/{commit_id}",
-            get(show_commit)
-        )
-        .route(
-            "/repo/{repo_name}/commits/json",
-            get(get_commits_json)
-        )
-        .route(
-            "/repo/{repo_name}/commits/all",
-            get(get_commits)
-        )
-        .route(
-            "/static/{file_name}",
-            get(get_static_file)
-        )
+        .route("/repo/{repo_name}/commit/{commit_id}", get(show_commit))
+        .route("/repo/{repo_name}/commits/json", get(get_commits_json))
+        .route("/repo/{repo_name}/commits/all", get(get_commits))
+        .route("/static/{file_name}", get(get_static_file))
         .with_state(app_state);
 
     // Define the server address
-    let addr = SocketAddr::from(([127, 0, 0, 1], ports.https));
+    let addr = SocketAddr::from(([127, 0, 0, 1], ports.http));
 
     // Start the https server
-    println!("Starting web server on 0.0.0.0:{}", ports.https);
+    println!("Starting web server on 0.0.0.0:{}", ports.http);
     tracing::debug!("listening on {}", addr);
-    axum_server::bind_rustls(addr, config)
+    axum_server::bind(addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
