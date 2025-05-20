@@ -310,7 +310,7 @@ async fn main() {
 
 
     // Define the server address
-    let addr = SocketAddr::from(([127, 0, 0, 1], ports.http));
+    let addr = SocketAddr::from(([0, 0, 0, 0], ports.http));
 
     // Start the https server
     println!("Starting web server on 0.0.0.0:{}", ports.http);
