@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 axum = "*"
 tokio = { version = "1", features = ["full"] }
-clap = "3.0"
+clap = "~3"
 serde = { version = "*", features = ["derive"] }
 tokio-util = { version = "*", features = ["io", "rt"] }
 tracing = "*"
